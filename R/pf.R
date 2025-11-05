@@ -1,0 +1,582 @@
+# =========================================================
+# MÓDULO UI: Mapa de Associados Sicredi - Pessoa Física
+# =========================================================
+pf_ui <- function(id) {
+  ns <- NS(id)
+  
+  tagList(
+    useShinyjs(),
+    
+    # ------------------ ESTILOS ------------------
+    tags$style(HTML(paste0("
+      #", ns("mapa_pf_container"), " { position:absolute; top:0; left:0; right:0; bottom:0; }
+      #", ns("mapa_pf_container"), " .leaflet-container { height: 100vh !important; width: 100% !important; }
+
+      .control-btn {
+        min-width: 180px; height: 38px; border-radius: 10px !important;
+        background:#fff; border:1px solid #e4e7ec; box-shadow:0 2px 8px rgba(0,0,0,0.08);
+        color:#2b2b2b; font-weight:600; text-align:left; padding-left:14px;
+      }
+      .control-btn:hover { background:#f7f8fa; }
+      .control-btn:focus { outline:none; box-shadow:0 0 0 3px rgba(111,200,54,0.25); }
+
+      #", ns("filtros_agencia"), ", #", ns("filtros_pf"), ", #", ns("camadas"), " {
+        background:#fff; padding:14px; border-radius:10px; box-shadow:0 2px 12px rgba(0,0,0,0.15);
+        display:none; width:300px; z-index:1100;
+      }
+      #", ns("filtros_agencia"), " h4, #", ns("filtros_pf"), " h4, #", ns("camadas"), " h4 { margin:0 0 10px 0; }
+
+      /* >>> NOVO: incluir os 4 cards de aposentadoria nos estilos comuns */
+      #", ns("contador_box"), ", #", ns("potencial_box"), ", #", ns("penetracao_box"), ",
+      #", ns("apos_idade_box"), ", #", ns("apos_invalidez_box"), ", #", ns("apos_temp_box"), ", #", ns("apos_total_box"), " {
+        position: fixed; left: 120px; width: 200px; min-height: 75px;
+        background: rgba(255,255,255,0.97); padding: 12px 20px; border-radius: 10px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.25); color: #30660c; z-index: 1020;
+        border-left: 5px solid #6fc836; display: flex; align-items: center; gap: 12px;
+        transition: left 0.0s ease;
+      }
+      #", ns("contador_box"), "       { top:  80px; }
+      #", ns("potencial_box"), "      { top: 160px; }
+      #", ns("penetracao_box"), "     { top: 240px; }
+      #", ns("apos_idade_box"), "     { top: 320px; }       /* >>> NOVO */
+      #", ns("apos_invalidez_box"), " { top: 400px; }       /* >>> NOVO */
+      #", ns("apos_temp_box"), "      { top: 480px; }       /* >>> NOVO */
+      #", ns("apos_total_box"), "     { top: 560px; }       /* >>> NOVO */
+
+      #", ns("contador_icon"), ", #", ns("potencial_icon"), ", #", ns("penetracao_icon"), ",
+      #", ns("apos_idade_icon"), ", #", ns("apos_invalidez_icon"), ", #", ns("apos_temp_icon"), ", #", ns("apos_total_icon"), " {
+        font-size:24px; color:#6fc836;
+      }
+
+      #", ns("contador_label"), ", #", ns("potencial_label"), ", #", ns("penetracao_label"), ",
+      #", ns("apos_idade_label"), ", #", ns("apos_invalidez_label"), ", #", ns("apos_temp_label"), ", #", ns("apos_total_label"), " {
+        font-size:13px; font-weight:500; color:#444; margin-bottom:-2px;
+      }
+
+      #", ns("contador_valor"), ", #", ns("potencial_valor"), ", #", ns("penetracao_valor"), ",
+      #", ns("apos_idade_valor"), ", #", ns("apos_invalidez_valor"), ", #", ns("apos_temp_valor"), ", #", ns("apos_total_valor"), " {
+        font-size:20px; font-weight:800; color:#30660c;
+      }
+    "))),
+    
+    # ------------------ MAPA ------------------
+    div(
+      id = ns("mapa_pf_container"),
+      leaflet::leafletOutput(ns("mapa_pf"), height = "100vh")
+    ),
+    
+    # Cards existentes
+    div(
+      id = ns("contador_box"),
+      icon("users", id = ns("contador_icon")),
+      div(div("Pessoas associadas", id = ns("contador_label")), textOutput(ns("contador_valor")))
+    ),
+    div(
+      id = ns("potencial_box"),
+      icon("id-card", id = ns("potencial_icon")),
+      div(div("Pessoas registradas", id = ns("potencial_label")), textOutput(ns("potencial_valor")))
+    ),
+    div(
+      id = ns("penetracao_box"),
+      icon("chart-pie", id = ns("penetracao_icon")),
+      div(div("Penetração Sicredi", id = ns("penetracao_label")), textOutput(ns("penetracao_valor")))
+    ),
+    
+    # >>> NOVO: 4 cards de aposentadoria --------------------
+    div(
+      id = ns("apos_idade_box"),
+      icon("user", id = ns("apos_idade_icon")),
+      div(div("Apos. por idade", id = ns("apos_idade_label")), textOutput(ns("apos_idade_valor")))
+    ),
+    div(
+      id = ns("apos_invalidez_box"),
+      icon("wheelchair", id = ns("apos_invalidez_icon")),
+      div(div("Apos. por invalidez", id = ns("apos_invalidez_label")), textOutput(ns("apos_invalidez_valor")))
+    ),
+    div(
+      id = ns("apos_temp_box"),
+      icon("hourglass-half", id = ns("apos_temp_icon")),
+      div(div("Apos. por tempo", id = ns("apos_temp_label")), textOutput(ns("apos_temp_valor")))
+    ),
+    div(
+      id = ns("apos_total_box"),
+      icon("users", id = ns("apos_total_icon")),
+      div(div("Aposentados (total)", id = ns("apos_total_label")), textOutput(ns("apos_total_valor")))
+    ),
+    # -------------------------------------------------------
+    
+    # Botões
+    absolutePanel(top = 80,  right = 20, actionButton(ns("toggle_agencia"), "Filtros territórios",   class = "control-btn")),
+    absolutePanel(top = 120, right = 20, actionButton(ns("toggle_pf"),      "Filtros pessoa física", class = "control-btn")),
+    absolutePanel(top = 160, right = 20, actionButton(ns("toggle_camadas"), "Camadas",               class = "control-btn")),
+    
+    # Painéis
+    absolutePanel(top = 120, right = 20, id = ns("filtros_agencia"),
+                  h4("Filtros territórios"),
+                  uiOutput(ns("filtro_uf_pf_ui")),
+                  uiOutput(ns("filtro_municipio_pf_ui")),
+                  uiOutput(ns("filtro_agencia_pf_ui")),
+                  selectInput(ns("filtro_area_pf"), "Área de influência:",
+                              choices = c("Primária"="P", "Secundária"="S", "Fora"="F"),
+                              selected = c("P","S","F"), multiple = TRUE)
+    ),
+    absolutePanel(top = 160, right = 20, id = ns("filtros_pf"),
+                  h4("Filtros pessoa física"),
+                  selectInput(ns("filtro_sexo_pf"), "Sexo:", choices = c("Todos", "Feminino", "Masculino"), selected = "Todos"),
+                  selectInput(ns("filtro_categoria_pf"), "Grupo etário:", choices = c("Todas", "Silver", "Pré-Silver", "Não-Silver"), selected = "Todas")
+    ),
+    absolutePanel(top = 200, right = 20, id = ns("camadas"),
+                  h4("Camadas"),
+                  checkboxInput(ns("mostrar_influencia_90pf"), "Exibir área de influência (P90 PF)", TRUE),
+                  checkboxInput(ns("mostrar_influencia_50pf"), "Exibir área de influência (P50 PF)", TRUE),
+                  checkboxInput(ns("mostrar_agencias_pf"),     "Exibir marcadores das agências",      TRUE)
+    ),
+    
+    # Ancoragem dos cards (ajusta à largura do sidebar)
+    tags$script(HTML(sprintf("
+      (function(){
+        /* >>> NOVO: incluir os 4 novos cards na lista de IDS */
+        const IDS = ['%s','%s','%s','%s','%s','%s','%s'], OFFSET = 20;
+        function positionCards(){
+          var s = document.querySelector('.main-sidebar');
+          var w = s ? (s.getBoundingClientRect().width||0) : 0;
+          IDS.forEach(function(id){ var el=document.getElementById(id); if(el) el.style.left=(w+OFFSET)+'px'; });
+        }
+        document.addEventListener('DOMContentLoaded', positionCards);
+        document.addEventListener('shiny:connected', positionCards);
+        window.addEventListener('resize', positionCards);
+        if (window.jQuery){
+          var $ = window.jQuery;
+          $(document).on('collapsed.lte.pushmenu shown.lte.pushmenu', function(){ setTimeout(positionCards,10); });
+        }
+        if (window.ResizeObserver){
+          var el = document.querySelector('.main-sidebar'); if (el){ new ResizeObserver(function(){ positionCards(); }).observe(el); }
+        } else { setInterval(positionCards, 500); }
+      })();
+    ",
+                             ns("contador_box"), ns("potencial_box"), ns("penetracao_box"),
+                             ns("apos_idade_box"), ns("apos_invalidez_box"), ns("apos_temp_box"), ns("apos_total_box")
+    )))
+  )
+}
+
+# =========================================================
+# MÓDULO SERVER: Mapa de Associados Sicredi - Pessoa Física
+# =========================================================
+pf_server <- function(id) {
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+    
+    # ---------- TOGGLES ----------
+    painel_aberto <- reactiveVal(NULL)
+    abrir_painel <- function(id){ shinyjs::hide("filtros_agencia"); shinyjs::hide("filtros_pf"); shinyjs::hide("camadas"); shinyjs::show(id); painel_aberto(id) }
+    fechar_todos <- function(){ shinyjs::hide("filtros_agencia"); shinyjs::hide("filtros_pf"); shinyjs::hide("camadas"); painel_aberto(NULL) }
+    observeEvent(input$toggle_agencia, { if (identical(painel_aberto(),"filtros_agencia")) fechar_todos() else abrir_painel("filtros_agencia") })
+    observeEvent(input$toggle_pf,      { if (identical(painel_aberto(),"filtros_pf"))      fechar_todos() else abrir_painel("filtros_pf") })
+    observeEvent(input$toggle_camadas, { if (identical(painel_aberto(),"camadas"))         fechar_todos() else abrir_painel("camadas") })
+    
+    # ---------- BASE PF (buffers) ----------
+    agencias_pf_validas <- reactive({
+      if (!exists("agencias_influencia_pf")) return(NULL)
+      base <- agencias_influencia_pf
+      if (!inherits(base, "sf")) return(NULL)
+      if (!"geometry" %in% names(base)) return(NULL)
+      base
+    })
+    
+    # ---------- UI DINÂMICO (territórios) ----------
+    output$filtro_uf_pf_ui <- renderUI({
+      base <- agencias_pf_validas(); req(!is.null(base), "uf_agencia" %in% names(base))
+      ufs <- sort(unique(base$uf_agencia))
+      selectInput(ns("filtro_uf_pf"), "UF da agência:", choices = c("Todos", ufs), selected = "Todos")
+    })
+    output$filtro_municipio_pf_ui <- renderUI({
+      base <- agencias_pf_validas(); req(!is.null(base), all(c("municipio_agencia","uf_agencia") %in% names(base)))
+      if (isTruthy(input$filtro_uf_pf) && input$filtro_uf_pf != "Todos")
+        base <- base[base$uf_agencia == input$filtro_uf_pf, , drop = FALSE]
+      munis <- sort(unique(base$municipio_agencia))
+      selectInput(ns("filtro_municipio_pf"), "Município da agência:", choices = c("Todos", munis), selected = "Todos")
+    })
+    output$filtro_agencia_pf_ui <- renderUI({
+      base <- agencias_pf_validas(); req(!is.null(base), all(c("cod_ua","nome_cooperativa","uf_agencia","municipio_agencia") %in% names(base)))
+      if (isTruthy(input$filtro_uf_pf) && input$filtro_uf_pf != "Todos")
+        base <- base[base$uf_agencia == input$filtro_uf_pf, , drop = FALSE]
+      if (isTruthy(input$filtro_municipio_pf) && input$filtro_municipio_pf != "Todos")
+        base <- base[base$municipio_agencia == input$filtro_municipio_pf, , drop = FALSE]
+      base <- base[order(base$nome_cooperativa), , drop = FALSE]
+      choices <- stats::setNames(base$cod_ua, base$nome_cooperativa)
+      sel_atual <- isolate(input$filtro_agencia_pf)
+      if (!isTruthy(sel_atual) || !(sel_atual %in% as.character(base$cod_ua))) sel_atual <- "Todos"
+      selectInput(ns("filtro_agencia_pf"), "Agência:", choices = c("Todos"="Todos", choices), selected = sel_atual)
+    })
+    observeEvent(list(input$filtro_uf_pf, input$filtro_municipio_pf), {
+      base <- agencias_pf_validas(); req(!is.null(base))
+      if (isTruthy(input$filtro_uf_pf) && input$filtro_uf_pf != "Todos")
+        base <- base[base$uf_agencia == input$filtro_uf_pf, , drop = FALSE]
+      if (isTruthy(input$filtro_municipio_pf) && input$filtro_municipio_pf != "Todos")
+        base <- base[base$municipio_agencia == input$filtro_municipio_pf, , drop = FALSE]
+      base <- base[order(base$nome_cooperativa), , drop = FALSE]
+      choices <- stats::setNames(base$cod_ua, base$nome_cooperativa)
+      sel <- isolate(input$filtro_agencia_pf); if (!isTruthy(sel) || !(sel %in% as.character(base$cod_ua))) sel <- "Todos"
+      updateSelectInput(session, "filtro_agencia_pf", choices = c("Todos"="Todos", choices), selected = sel)
+    }, ignoreInit = TRUE)
+    
+    # ---------- DADOS PF (associados) ----------
+    pf_sicredi_filtrada <- reactive({
+      if (!exists("pf_sicredi")) return(NULL)
+      df <- pf_sicredi
+      
+      # Sexo
+      if (isTruthy(input$filtro_sexo_pf) && input$filtro_sexo_pf != "Todos" && "sexo" %in% names(df)) {
+        df <- df[df$sexo == input$filtro_sexo_pf, , drop = FALSE]
+      }
+      # Grupo etário
+      if (isTruthy(input$filtro_categoria_pf) && input$filtro_categoria_pf != "Todas" && "classificacao_idade" %in% names(df)) {
+        df <- df[df$classificacao_idade == input$filtro_categoria_pf, , drop = FALSE]
+      }
+      # Área (P/S/F)
+      if ("area_tipo" %in% names(df)) {
+        sel_area <- input$filtro_area_pf
+        if (length(sel_area) == 0) df <- df[FALSE, , drop = FALSE] else df <- df[df$area_tipo %in% sel_area, , drop = FALSE]
+      }
+      # Território
+      if (isTruthy(input$filtro_uf_pf) && input$filtro_uf_pf != "Todos" && "uf_agencia" %in% names(df)) {
+        df <- df[df$uf_agencia == input$filtro_uf_pf, , drop = FALSE]
+      }
+      if (isTruthy(input$filtro_municipio_pf) && input$filtro_municipio_pf != "Todos" && "municipio_cooperativa" %in% names(df)) {
+        df <- df[df$municipio_cooperativa == input$filtro_municipio_pf, , drop = FALSE]
+      }
+      if (isTruthy(input$filtro_agencia_pf) && input$filtro_agencia_pf != "Todos") {
+        if ("cod_ua" %in% names(df)) {
+          df <- df[df$cod_ua == as.numeric(input$filtro_agencia_pf), , drop = FALSE]
+        } else if ("nome_agencia" %in% names(df)) {
+          base_ag <- agencias_pf_validas()
+          if (!is.null(base_ag)) {
+            nm <- base_ag$nome_cooperativa[base_ag$cod_ua == as.numeric(input$filtro_agencia_pf)][1]
+            df <- df[df$nome_agencia == nm, , drop = FALSE]
+          }
+        }
+      }
+      df
+    })
+    
+    # ---------- DADOS PF (agregados IBGE - nível agência) ----------
+    pf_ibge_filtrada <- reactive({
+      if (!exists("pf_agregados_ibge")) return(NULL)
+      df <- pf_agregados_ibge
+      
+      if (isTruthy(input$filtro_sexo_pf) && input$filtro_sexo_pf != "Todos" && "sexo" %in% names(df)) {
+        df <- df[df$sexo == input$filtro_sexo_pf, , drop = FALSE]
+      }
+      if (isTruthy(input$filtro_categoria_pf) && input$filtro_categoria_pf != "Todas" && "classificacao_idade" %in% names(df)) {
+        df <- df[df$classificacao_idade == input$filtro_categoria_pf, , drop = FALSE]
+      }
+      if ("area_tipo" %in% names(df)) {
+        sel_ps <- intersect(input$filtro_area_pf, c("P","S"))
+        if (length(sel_ps) > 0) df <- df[df$area_tipo %in% sel_ps, , drop = FALSE] else df <- df[FALSE, , drop = FALSE]
+      }
+      if (isTruthy(input$filtro_uf_pf) && input$filtro_uf_pf != "Todos" && "uf_agencia" %in% names(df)) {
+        df <- df[df$uf_agencia == input$filtro_uf_pf, , drop = FALSE]
+      }
+      if (isTruthy(input$filtro_municipio_pf) && input$filtro_municipio_pf != "Todos" && "municipio_agencia" %in% names(df)) {
+        df <- df[df$municipio_agencia == input$filtro_municipio_pf, , drop = FALSE]
+      }
+      if (isTruthy(input$filtro_agencia_pf) && input$filtro_agencia_pf != "Todos") {
+        if ("cod_ua" %in% names(df)) {
+          df <- df[df$cod_ua == as.numeric(input$filtro_agencia_pf), , drop = FALSE]
+        } else if ("nome_cooperativa" %in% names(df)) {
+          base_ag <- agencias_pf_validas()
+          if (!is.null(base_ag)) {
+            nm <- base_ag$nome_cooperativa[base_ag$cod_ua == as.numeric(input$filtro_agencia_pf)][1]
+            df <- df[df$nome_cooperativa == nm, , drop = FALSE]
+          }
+        }
+      }
+      df
+    })
+    
+    # ---------- DADOS PF agregados por município (pf_agg_ibge_muni) ----------
+    pf_ibge_muni_filtrada <- reactive({
+      if (!exists("pf_agg_ibge_muni")) return(NULL)
+      df <- pf_agg_ibge_muni
+      
+      if (isTruthy(input$filtro_sexo_pf) && input$filtro_sexo_pf != "Todos" && "sexo" %in% names(df)) {
+        df <- df[df$sexo == input$filtro_sexo_pf, , drop = FALSE]
+      }
+      if (isTruthy(input$filtro_categoria_pf) && input$filtro_categoria_pf != "Todas" && "classificacao_idade" %in% names(df)) {
+        df <- df[df$classificacao_idade == input$filtro_categoria_pf, , drop = FALSE]
+      }
+      if ("area_influ" %in% names(df)) {
+        sel_ps <- intersect(input$filtro_area_pf, c("P","S"))
+        if (length(sel_ps) > 0) df <- df[df$area_influ %in% sel_ps, , drop = FALSE] else df <- df[FALSE, , drop = FALSE]
+      }
+      if (isTruthy(input$filtro_uf_pf) && input$filtro_uf_pf != "Todos" && "uf_agencia" %in% names(df)) {
+        df <- df[df$uf_agencia == input$filtro_uf_pf, , drop = FALSE]
+      }
+      if (isTruthy(input$filtro_municipio_pf) && input$filtro_municipio_pf != "Todos" && "municipio_agencia" %in% names(df)) {
+        df <- df[df$municipio_agencia == input$filtro_municipio_pf, , drop = FALSE]
+      }
+      # Importante: não filtrar por agência aqui
+      df
+    })
+    
+    # ---------- >>> NOVO: DADOS APOSENTADORIA (nível município) ----------
+    aposentadoria_filtrada <- reactive({
+      if (!exists("aposentadoria")) return(NULL)
+      df <- aposentadoria  # Esperado: nome_munic, uf, idade, invalidez, temp_contribuicao, total
+      
+      # (Opcional) acoplar área de influência (P/S) por município, se base existir
+      if (exists("pf_agg_ibge_muni")) {
+        map <- pf_agg_ibge_muni
+        keep <- c("municipio_agencia","uf_agencia")
+        if ("area_influ" %in% names(map)) keep <- c(keep, "area_influ")
+        map <- map[, keep, drop = FALSE]
+        names(map)[names(map) == "municipio_agencia"] <- "nome_munic"
+        names(map)[names(map) == "uf_agencia"] <- "uf"
+        # garantir 1 linha por (nome_munic, uf); prioriza 'P' em caso de duplicidade
+        if ("area_influ" %in% names(map)) {
+          ord <- match(map$area_influ, c("P","S"))
+          map <- map[order(ord, map$nome_munic, map$uf, na.last = TRUE), , drop = FALSE]
+          key <- paste0(map$nome_munic, "|", map$uf)
+          map <- map[!duplicated(key), , drop = FALSE]
+          df <- merge(df, map, by = c("nome_munic","uf"), all.x = TRUE)
+        }
+      }
+      
+      # Filtros territoriais
+      if (isTruthy(input$filtro_uf_pf) && input$filtro_uf_pf != "Todos" && "uf" %in% names(df)) {
+        df <- df[df$uf == input$filtro_uf_pf, , drop = FALSE]
+      }
+      
+      ag_sel <- isTruthy(input$filtro_agencia_pf) && input$filtro_agencia_pf != "Todos"
+      if (ag_sel) {
+        # Agência selecionada -> usar o município e a UF da agência, sem duplicar soma
+        base_ag <- agencias_pf_validas()
+        if (!is.null(base_ag)) {
+          muni_ag <- base_ag$municipio_agencia[base_ag$cod_ua == as.numeric(input$filtro_agencia_pf)][1]
+          uf_ag   <- base_ag$uf_agencia[base_ag$cod_ua == as.numeric(input$filtro_agencia_pf)][1]
+          df <- df[df$nome_munic == muni_ag & df$uf == uf_ag, , drop = FALSE]
+        } else {
+          # fallback: se não há base de agências, aplicar município escolhido no filtro manual
+          if (isTruthy(input$filtro_municipio_pf) && input$filtro_municipio_pf != "Todos" && "nome_munic" %in% names(df)) {
+            df <- df[df$nome_munic == input$filtro_municipio_pf, , drop = FALSE]
+          }
+        }
+      } else {
+        # Sem agência selecionada -> respeita UF/Município do filtro
+        if (isTruthy(input$filtro_municipio_pf) && input$filtro_municipio_pf != "Todos" && "nome_munic" %in% names(df)) {
+          df <- df[df$nome_munic == input$filtro_municipio_pf, , drop = FALSE]
+        }
+      }
+      
+      # Filtro de Área (P/S) se 'area_influ' estiver disponível
+      if ("area_influ" %in% names(df)) {
+        sel_ps <- intersect(input$filtro_area_pf, c("P","S"))
+        if (length(sel_ps) > 0) {
+          df <- df[df$area_influ %in% sel_ps, , drop = FALSE]
+        } else {
+          df <- df[FALSE, , drop = FALSE]
+        }
+      }
+      df
+    })
+    
+    # ---------- MAPA INICIAL ----------
+    output$mapa_pf <- leaflet::renderLeaflet({
+      center_lng <- -55; center_lat <- -14; zoom0 <- 4
+      base <- agencias_pf_validas()
+      if (!is.null(base)) {
+        bbox <- sf::st_bbox(base)
+        center_lng <- mean(c(bbox["xmin"], bbox["xmax"]), na.rm = TRUE)
+        center_lat <- mean(c(bbox["ymin"], bbox["ymax"]), na.rm = TRUE)
+        zoom0 <- 5
+      }
+      leaflet::leaflet() %>%
+        leaflet::addProviderTiles("CartoDB.Positron") %>%
+        leaflet::addTiles() %>%
+        leaflet::setView(lng = center_lng, lat = center_lat, zoom = zoom0)
+    })
+    outputOptions(output, "mapa_pf", suspendWhenHidden = FALSE)
+    
+    # ---------- ÍCONE ----------
+    agenciaIconPF <- leaflet::makeIcon(
+      iconUrl     = "placeholder.png",
+      iconWidth   = 25, iconHeight = 25,
+      iconAnchorX = 0,  iconAnchorY = 5
+    )
+    
+    # ---------- DESENHO DE CAMADAS ----------
+    observe({
+      base <- agencias_pf_validas()
+      if (!is.null(base)) {
+        if (isTruthy(input$filtro_uf_pf) && input$filtro_uf_pf != "Todos")
+          base <- base[base$uf_agencia == input$filtro_uf_pf, , drop = FALSE]
+        if (isTruthy(input$filtro_municipio_pf) && input$filtro_municipio_pf != "Todos")
+          base <- base[base$municipio_agencia == input$filtro_municipio_pf, , drop = FALSE]
+        if (isTruthy(input$filtro_agencia_pf) && input$filtro_agencia_pf != "Todos")
+          base <- base[base$cod_ua == as.numeric(input$filtro_agencia_pf), , drop = FALSE]
+      }
+      
+      show90 <- isTRUE(input$mostrar_influencia_90pf)
+      show50 <- isTRUE(input$mostrar_influencia_50pf)
+      showA  <- isTRUE(input$mostrar_agencias_pf)
+      
+      prox <- leaflet::leafletProxy("mapa_pf") %>%
+        leaflet::clearGroup("pf_influencia_90") %>%
+        leaflet::clearGroup("pf_influencia_50") %>%
+        leaflet::clearGroup("pf_agencias")
+      
+      if (is.null(base) || nrow(base) == 0) return(invisible())
+      
+      if (show90 && "buffer_90pf" %in% names(base)) {
+        shp90 <- tryCatch(sf::st_set_geometry(base, "buffer_90pf"), error = function(e) NULL)
+        if (!is.null(shp90) && inherits(sf::st_geometry(shp90), c("sfc_POLYGON","sfc_MULTIPOLYGON"))) {
+          prox <- prox %>% leaflet::addPolygons(
+            data = shp90, color = "#1f77b4", weight = 1, fillOpacity = 0.20,
+            popup = ~paste0(
+              "<b>UA:</b> ", cod_ua, "<br>",
+              "<b>Agência:</b> ", nome_cooperativa, "<br>",
+              "<b>UF:</b> ", uf_agencia, " &nbsp; <b>Município:</b> ", municipio_agencia, "<br>",
+              "<b>Buffer:</b> P90 (PF)<br>",
+              "<b>Área primária (km):</b> ", round(dist_50pf, 2), "<br>",
+              "<b>Área secundária (km):</b> ", round(dist_90pf, 2)
+            ),
+            group = "pf_influencia_90"
+          )
+        }
+      }
+      
+      if (show50 && "buffer_50pf" %in% names(base)) {
+        shp50 <- tryCatch(sf::st_set_geometry(base, "buffer_50pf"), error = function(e) NULL)
+        if (!is.null(shp50) && inherits(sf::st_geometry(shp50), c("sfc_POLYGON","sfc_MULTIPOLYGON"))) {
+          prox <- prox %>% leaflet::addPolygons(
+            data = shp50, color = "#d62728", weight = 1, fillOpacity = 0.15,
+            popup = ~paste0(
+              "<b>UA:</b> ", cod_ua, "<br>",
+              "<b>Agência:</b> ", nome_cooperativa, "<br>",
+              "<b>UF:</b> ", uf_agencia, " &nbsp; <b>Município:</b> ", municipio_agencia, "<br>",
+              "<b>Buffer:</b> P50 (PF)<br>",
+              "<b>Área primária (km):</b> ", round(dist_50pf, 2), "<br>",
+              "<b>Área secundária (km):</b> ", round(dist_90pf, 2)
+            ),
+            group = "pf_influencia_50"
+          )
+        }
+      }
+      
+      if (showA) {
+        prox %>% leaflet::addMarkers(
+          data = base, icon = agenciaIconPF,
+          label = ~nome_cooperativa,
+          labelOptions = leaflet::labelOptions(
+            noHide = FALSE, direction = "auto", offset = c(0, -10),
+            opacity = 0.9, textsize = "12px",
+            style = list(
+              "font-weight" = "600", "color" = "#30660c",
+              "background" = "rgba(255,255,255,0.95)",
+              "border" = "1px solid #6fc836",
+              "padding" = "2px 6px",
+              "border-radius" = "6px",
+              "box-shadow" = "0 1px 6px rgba(0,0,0,0.15)"
+            )
+          ),
+          popup = ~paste0(
+            "<b>UA:</b> ", cod_ua, "<br>",
+            "<b>Agência:</b> ", nome_cooperativa, "<br>",
+            "<b>Local:</b> ", municipio_agencia, " - ", uf_agencia, "<br>",
+            "<b>Área primária (km):</b> ", round(dist_50pf, 2), "<br>",
+            "<b>Área secundária (km):</b> ", round(dist_90pf, 2)
+          ),
+          group = "pf_agencias",
+          layerId = ~as.character(cod_ua)
+        )
+      }
+    })
+    
+    # ---------- Zoom ao selecionar agência ----------
+    observeEvent(input$filtro_agencia_pf, {
+      base <- agencias_pf_validas()
+      req(!is.null(base))
+      
+      if (isTruthy(input$filtro_agencia_pf) && input$filtro_agencia_pf != "Todos") {
+        ag <- base[base$cod_ua == as.numeric(input$filtro_agencia_pf), , drop = FALSE]
+        if (nrow(ag) > 0) {
+          ag4326 <- tryCatch({
+            if (is.na(sf::st_crs(ag))) ag else sf::st_transform(ag, 4326)
+          }, error = function(e) ag)
+          
+          geom <- ag4326$geometry
+          if (!inherits(sf::st_geometry(geom), c("sfc_POINT"))) {
+            geom <- sf::st_centroid(geom)
+          }
+          xy <- sf::st_coordinates(geom)[1, ]
+          lon <- as.numeric(xy[1]); lat <- as.numeric(xy[2])
+          if (is.finite(lon) && is.finite(lat)) {
+            leaflet::leafletProxy("mapa_pf", session = session) %>%
+              leaflet::setView(lng = lon, lat = lat, zoom = 13)
+          }
+        }
+      }
+    }, ignoreInit = TRUE)
+    
+    # ---------- AUXILIARES PARA OS CARDS ----------
+    tot_associados <- reactive({
+      df <- pf_sicredi_filtrada()
+      if (!is.null(df) && "associados" %in% names(df)) sum(df$associados, na.rm = TRUE) else 0
+    })
+    
+    # >>> alternância entre base por agência (pf_agregados_ibge) e por município (pf_agg_ibge_muni)
+    tot_registrados <- reactive({
+      ag_sel <- isTruthy(input$filtro_agencia_pf) && input$filtro_agencia_pf != "Todos"
+      ibge <- if (ag_sel) pf_ibge_filtrada() else pf_ibge_muni_filtrada()
+      if (!is.null(ibge) && "populacao" %in% names(ibge)) sum(ibge$populacao, na.rm = TRUE) else 0
+    })
+    
+    # ---------- >>> NOVO: TOTAIS DE APOSENTADORIA PARA OS NOVOS CARDS ----------
+    tot_apos_idade <- reactive({
+      df <- aposentadoria_filtrada()
+      if (!is.null(df) && "idade" %in% names(df)) sum(df$idade, na.rm = TRUE) else 0
+    })
+    tot_apos_invalidez <- reactive({
+      df <- aposentadoria_filtrada()
+      if (!is.null(df) && "invalidez" %in% names(df)) sum(df$invalidez, na.rm = TRUE) else 0
+    })
+    tot_apos_temp <- reactive({
+      df <- aposentadoria_filtrada()
+      if (!is.null(df) && "temp_contribuicao" %in% names(df)) sum(df$temp_contribuicao, na.rm = TRUE) else 0
+    })
+    tot_apos_total <- reactive({
+      df <- aposentadoria_filtrada()
+      if (!is.null(df) && "total" %in% names(df)) sum(df$total, na.rm = TRUE) else 0
+    })
+    
+    # ---------- CARDS ----------
+    output$contador_valor <- renderText({
+      format(as.integer(tot_associados()), big.mark = ".", decimal.mark = ",")
+    })
+    output$potencial_valor <- renderText({
+      format(as.integer(tot_registrados()), big.mark = ".", decimal.mark = ",")
+    })
+    output$penetracao_valor <- renderText({
+      num <- tot_associados()
+      den <- tot_registrados()
+      if (!is.finite(den) || den <= 0) return("0 %")
+      perc <- (num / den) * 100
+      paste0(format(round(perc, 1), big.mark = ".", decimal.mark = ","), " %")
+    })
+    
+    # ---------- >>> NOVO: RENDER DOS 4 NOVOS CARDS ----------
+    output$apos_idade_valor <- renderText({
+      format(as.integer(tot_apos_idade()), big.mark = ".", decimal.mark = ",")
+    })
+    output$apos_invalidez_valor <- renderText({
+      format(as.integer(tot_apos_invalidez()), big.mark = ".", decimal.mark = ",")
+    })
+    output$apos_temp_valor <- renderText({
+      format(as.integer(tot_apos_temp()), big.mark = ".", decimal.mark = ",")
+    })
+    output$apos_total_valor <- renderText({
+      format(as.integer(tot_apos_total()), big.mark = ".", decimal.mark = ",")
+    })
+  })
+}

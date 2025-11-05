@@ -1,0 +1,13 @@
+name: sicredi_silver
+title: sicredi_silver
+username: erikluan
+account: erikluan
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 15882354
+bundleId: 11136302
+url: https://erikluan.shinyapps.io/sicredi_silver/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .Renviron|conectar/conectar.R|scritps
