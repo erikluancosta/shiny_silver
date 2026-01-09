@@ -1,9 +1,12 @@
-# app.R — corrigido (hover #F8F9F7)
+# app.R — com aba "Donas do Negócio"
 
 # Carregamento de scripts e credenciais
 source('global.R')
 source("conectar/credenciais.R")
 print(credentials)
+
+# >>> NOVO: módulo Donas do Negócio
+source("R/donas_negocio.R")  # ajuste o caminho se seu arquivo estiver em outro lugar
 
 # Tema customizado (fresh para bs4Dash - Bootstrap 4)
 tema <- fresh::create_theme(
@@ -31,10 +34,13 @@ app_ui <- bs4DashPage(
     bs4SidebarMenu(
       bs4SidebarMenuItem("Mapa de Associados PJ", tabName = "tela_clientes", icon = icon("map")),
       bs4SidebarMenuItem("Mapa de Associados PF", tabName = "tela_pf", icon = icon("map")),
+      
+      # >>> NOVO
+      bs4SidebarMenuItem("Donas do Negócio", tabName = "tela_donas", icon = icon("person-dress")),
+      
       bs4SidebarMenuItem(
         "Análises Descritivas", icon = icon("chart-column"),
-        bs4SidebarMenuSubItem("Análise geral", tabName = "tela_geral")#,
-        #bs4SidebarMenuSubItem("MEI Silver", tabName = "tela_meisilver")
+        bs4SidebarMenuSubItem("Análise geral", tabName = "tela_geral")
       )
     )
   ),
@@ -44,8 +50,6 @@ app_ui <- bs4DashPage(
     
     # ===== Estilos customizados =====
     tags$head(
-      # (removido o amarelo antigo)
-      # --- Range slider
       tags$style(HTML("
         .irs-bar { background-color: transparent !important; }
         .irs-bar-edge { background-color: transparent !important; }
@@ -54,16 +58,12 @@ app_ui <- bs4DashPage(
       
       # ===== HOTFIX dropdowns: fundo branco + HOVER #F8F9F7 =====
       tags$style(HTML("
-        /* bootstrap-select (pickerInput/selectInput com dropdown bonito) */
-        .bootstrap-select .dropdown-menu {
-          background-color: #fff !important;
-        }
+        .bootstrap-select .dropdown-menu { background-color: #fff !important; }
         .bootstrap-select .dropdown-menu .dropdown-item,
         .bootstrap-select .dropdown-menu li a {
           background-color: #fff !important;
           color: #222 !important;
         }
-        /* Hover / focus usa #F8F9F7 */
         .bootstrap-select .dropdown-menu .dropdown-item:hover,
         .bootstrap-select .dropdown-menu .dropdown-item:focus,
         .bootstrap-select .dropdown-menu li a:hover,
@@ -71,14 +71,12 @@ app_ui <- bs4DashPage(
           background-color: #F8F9F7 !important;
           color: #111 !important;
         }
-        /* Item selecionado */
         .bootstrap-select .dropdown-menu .dropdown-item.active,
         .bootstrap-select .dropdown-menu li a.active {
           background-color: #30660c !important;
           color: #fff !important;
         }
 
-        /* selectize (selectInput padrão) */
         .selectize-dropdown,
         .selectize-dropdown .option { background-color:#fff !important; color:#222 !important; }
         .selectize-dropdown .option:hover,
@@ -89,8 +87,12 @@ app_ui <- bs4DashPage(
     
     bs4TabItems(
       bs4TabItem(tabName = "tela_clientes", clientes_ui("clientes")),
-      bs4TabItem(tabName = "tela_geral", geral_ui("geral")),
       bs4TabItem(tabName = "tela_pf", pf_ui("pf")),
+      
+      # >>> NOVO
+      bs4TabItem(tabName = "tela_donas", donas_ui("donas")),
+      
+      bs4TabItem(tabName = "tela_geral", geral_ui("geral")),
       bs4TabItem(tabName = "tela_meisilver", meisilver_ui("meisilver"))
     )
   ),
@@ -104,7 +106,7 @@ ui <- shinymanager::secure_app(
   language = "pt-BR",
   enable_admin = FALSE,
   theme = bslib::bs_theme(
-    version = 4,  # importante para não conflitar com bs4Dash
+    version = 4,
     base_font = bslib::font_google("Inter"),
     primary   = "#30660c",
     success   = "#6fc836",
@@ -114,7 +116,6 @@ ui <- shinymanager::secure_app(
     dark      = "#121E54"
   ),
   tags_top = tags$head(
-    # --------- CSS da página de login ---------
     tags$style(HTML("
       body {
         background: radial-gradient(1200px 800px at 10% 10%, rgba(111,200,54,0.10), transparent 60%),
@@ -161,14 +162,12 @@ ui <- shinymanager::secure_app(
     "))
   ),
   tags_bottom = tagList(
-    # --------- Branding (topo) ----------
     tags$div(
       class = "sm-brand-wrap",
       tags$img(src = "https://yt3.googleusercontent.com/ytc/AIdro_mX0Dsx4mnkCSatUSSs_1X64KqC3LTAbyQrLo-aK3qaC-0=s900-c-k-c0x00ffffff-no-rj"),
       tags$h3(class = "sm-title", "Sicredi Associados"),
       tags$div(class = "sm-subtitle", "Acesso restrito · | Construnet")
     ),
-    # --------- JS: toggle de senha ----------
     tags$script(HTML("
       (function(){
         function ensureToggle(){
@@ -234,7 +233,9 @@ server <- function(input, output, session) {
   geral_server("geral")
   pf_server("pf")
   meisilver_server("meisilver")
+  
+  # >>> NOVO
+  donas_server("donas")
 }
 
-# Run
 shinyApp(ui, server)
