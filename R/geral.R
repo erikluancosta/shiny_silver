@@ -46,7 +46,6 @@ geral_ui <- function(id) {
         column(3, uiOutput(ns("ui_agencia"))),
         column(
           2,
-          # >>> novo: multisseleção igual ao "Porte"
           selectInput(
             ns("filtro_area"), "Área de influência:",
             choices  = c("Primária"="P","Secundária"="S"),
@@ -111,7 +110,8 @@ geral_ui <- function(id) {
                       "Raio Primário (km)"="raio_p",
                       "Raio Secundário (km)"="raio_s"),
           selected = "gap")),
-        column(3, sliderInput(ns("top_n"), "Top N:", min=5, max=50, value=20, step=1, width="100%"))
+        # >>> ALTERADO: Top N de 0 a 50
+        column(3, sliderInput(ns("top_n"), "Top N:", min=0, max=50, value=20, step=1, width="100%"))
       ),
       DT::dataTableOutput(ns("tabela_agencia"))
     ),
@@ -143,7 +143,7 @@ geral_server <- function(id) {
       else if ("freq" %in% names(df))               df$freq
       else if ("n" %in% names(df))                  df$n
       else rep(0, nrow(df))
-      as.numeric(v)   # <- força double
+      as.numeric(v)
     }
     
     # ---------- metadados das agências e raios ----------
@@ -262,7 +262,6 @@ geral_server <- function(id) {
           dplyr::group_by(cod_ua, area = area_tipo) |>
           dplyr::summarise(universo = sum(`__univ__`, na.rm = TRUE), .groups = "drop")
       } else {
-        # PF – sempre para a TABELA usar nível agência
         if (!exists("pf_agregados_ibge")) return(dplyr::tibble(cod_ua=integer(), area=character(), universo=integer()))
         df <- pf_agregados_ibge
         if (!is.null(input$filtro_uf) && input$filtro_uf != "Todos" && "uf_agencia" %in% names(df)) df <- dplyr::filter(df, uf_agencia == input$filtro_uf)
@@ -304,30 +303,25 @@ geral_server <- function(id) {
         )
     })
     
-    # ---------- KPIs (com regra de “base sem agência” para Universo) ----------
-    # total associados (soma do que entrou após filtros)
+    # ---------- KPIs ----------
     output$kpi_associados <- renderText({
       df <- associados_ua_area(); fmt_int(sum(df$associados, na.rm = TRUE))
     })
     
-    # universo: regra por segmento e seleção de agência
     universo_kpi <- reactive({
       areas_sel <- or_default(input$filtro_area, c("P","S"))
       
       if (identical(input$segmento, "PJ")) {
         ag_sel <- isTruthy(input$filtro_agencia) && input$filtro_agencia != "Todos"
         if (ag_sel) {
-          # nível agência
           if (!exists("agg_agencias")) return(0L)
           df <- agg_agencias
           if (!is.null(input$filtro_agencia) && input$filtro_agencia != "Todos" && "cod_ua" %in% names(df))
             df <- dplyr::filter(df, cod_ua == as.numeric(input$filtro_agencia))
         } else {
-          # sem agência selecionada: usar a base “sem agência”
           if (!exists("agg_empresas")) return(0L)
           df <- agg_empresas
         }
-        # filtros comuns
         if (!is.null(input$filtro_uf) && input$filtro_uf != "Todos" && "uf_cooperativa" %in% names(df)) df <- dplyr::filter(df, uf_cooperativa == input$filtro_uf)
         if (!is.null(input$filtro_municipio) && input$filtro_municipio != "Todos" && "municipio_cooperativa" %in% names(df)) df <- dplyr::filter(df, municipio_cooperativa == input$filtro_municipio)
         if (!is.null(input$filtro_sexo) && input$filtro_sexo != "Todos" && ("sexo_me" %in% names(df) || "sexo_final" %in% names(df))) {
@@ -350,12 +344,10 @@ geral_server <- function(id) {
           if (!exists("pf_agg_ibge_muni")) return(0L)
           df <- pf_agg_ibge_muni
         }
-        # filtros comuns
         if (!is.null(input$filtro_uf) && input$filtro_uf != "Todos" && "uf_agencia" %in% names(df)) df <- dplyr::filter(df, uf_agencia == input$filtro_uf)
         if (!is.null(input$filtro_municipio) && input$filtro_municipio != "Todos" && "municipio_agencia" %in% names(df)) df <- dplyr::filter(df, municipio_agencia == input$filtro_municipio)
         if (!is.null(input$filtro_sexo) && input$filtro_sexo != "Todos" && "sexo" %in% names(df)) df <- dplyr::filter(df, sexo == input$filtro_sexo)
         if (!is.null(input$filtro_categoria) && input$filtro_categoria != "Todas" && "classificacao_idade" %in% names(df)) df <- dplyr::filter(df, classificacao_idade == input$filtro_categoria)
-        # área (P/S) — em muni usa 'area_influ', na agência usa 'area_tipo'
         if ("area_tipo" %in% names(df))  df <- dplyr::filter(df, area_tipo  %in% areas_sel)
         if ("area_influ" %in% names(df)) df <- dplyr::filter(df, area_influ %in% areas_sel)
         if ("populacao" %in% names(df)) sum(df$populacao, na.rm = TRUE) else 0L
@@ -374,7 +366,7 @@ geral_server <- function(id) {
     output$kpi_raio_p <- renderText({ fmt_num(mean(meta_filtrada()$dist_p_km, na.rm = TRUE)) })
     output$kpi_raio_s <- renderText({ fmt_num(mean(meta_filtrada()$dist_s_km, na.rm = TRUE)) })
     
-    # ---------- Tabela ----------
+    # ---------- Tabela (com Excel configurado) ----------
     output$tabela_agencia <- DT::renderDataTable({
       df <- medidas_agencia()
       ord <- switch(input$rank_metric,
@@ -385,7 +377,9 @@ geral_server <- function(id) {
                     "raio_p" = dplyr::arrange(df, dplyr::desc(dist_p_km)),
                     "raio_s" = dplyr::arrange(df, dplyr::desc(dist_s_km)),
                     dplyr::arrange(df, dplyr::desc(gap)))
-      top_n <- or_default(input$top_n, 20L); ord <- utils::head(ord, top_n)
+      
+      top_n <- or_default(input$top_n, 20L)
+      ord <- utils::head(ord, top_n)
       
       out <- ord |>
         dplyr::transmute(
@@ -396,13 +390,34 @@ geral_server <- function(id) {
           `Penetração (%)`=round(pen,1), `Gap`=gap
         )
       
+      # >>> Inteiros para exportação
+      cols_int <- c("Associados P","Associados S","Associados (Total)",
+                    "Universo P","Universo S","Universo (Total)","Gap")
+      for (nm in cols_int) {
+        if (nm %in% names(out)) out[[nm]] <- as.integer(round(out[[nm]]))
+      }
+      
       DT::datatable(
         out, rownames = FALSE, extensions = "Buttons",
-        options = list(dom="Bfrtip", pageLength=min(20, nrow(out)), buttons=c("copy","csv","excel"), scrollX=TRUE)
+        options = list(
+          dom = "Bfrtip",
+          pageLength = min(max(top_n, 1L), 50L),
+          buttons = list(
+            list(
+              extend = "excel",
+              title = NULL,
+              filename = "analise_penetracao_sicredi",    # <<< Nome do arquivo
+              exportOptions = list(
+                modifier = list(page = "all")             # <<< Exporta todas as linhas do 'out'
+              )
+            ),
+            "copy"#, "csv"
+          ),
+          scrollX = TRUE
+        )
       ) |>
-        DT::formatCurrency(c("Associados P","Associados S","Associados (Total)","Universo P","Universo S","Universo (Total)","Gap"),
-                           currency = "", mark=".", digits=0) |>
-        DT::formatRound(c("Raio P (km)","Raio S (km)","Penetração (%)"), digits=c(2,2,1), mark=",")
+        DT::formatCurrency(columns = cols_int, currency = "", mark = ".", digits = 0) |>
+        DT::formatRound(c("Raio P (km)","Raio S (km)","Penetração (%)"), digits = c(2,2,1), mark = ",")
     })
     
     # ---------- Gráfico ----------
@@ -410,12 +425,11 @@ geral_server <- function(id) {
       df <- medidas_agencia()
       if (nrow(df) == 0) return(NULL)
       
-      # Paleta Sicredi
-      col_primary   <- "#30660c"  # verde escuro (borda/acentos)
-      col_info      <- "#6fc836"  # verde principal (barras)
-      col_secondary <- "#3d8212"  # verde médio (opcional)
-      col_warning   <- "#121E54"  # azul-escuro do tema (títulos/eixos)
-      col_bg        <- "#ffffff"  # fundo
+      col_primary   <- "#30660c"
+      col_info      <- "#6fc836"
+      col_secondary <- "#3d8212"
+      col_warning   <- "#121E54"
+      col_bg        <- "#ffffff"
       
       top_n <- input$top_n %||% 20
       top_gap <- df |>
@@ -428,8 +442,8 @@ geral_server <- function(id) {
         x = ~gap, y = ~reorder(lbl, gap),
         type = "bar", orientation = "h",
         marker = list(
-          color = col_info,                   # barras em verde Sicredi
-          line  = list(color = col_primary, width = 1.2)  # borda em verde escuro
+          color = col_info,
+          line  = list(color = col_primary, width = 1.2)
         ),
         hoverinfo = "text",
         text = ~paste0(

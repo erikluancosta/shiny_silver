@@ -105,7 +105,7 @@ load('dados/pf_agregados_ibge.Rda')
 load('dados/pf_agregados_ibge_muni_uf.Rda')
 
 
-
+renda <- readRDS('dados/pf_setores_renda.rds')
 
 # DADOS DE APOSENTADORIA
 aposentadoria <- readxl::read_excel('dados/aposentadoria_sicredi_uniao.xlsx')
